@@ -1,4 +1,4 @@
-// ===================== MAIN.JS (YENİLƏNMİŞ SÜRÜM) =====================
+// ===================== MAIN.JS (YENİLƏNMİŞ SÜRÜM - BigNumber Düzəlişi ilə) =====================
 import { ethers } from "ethers";
 import { Seaport } from "@opensea/seaport-js";
 
@@ -43,14 +43,13 @@ function notify(msg, timeout = 3000) {
     }, timeout);
 }
 
-// 🐛 DÜZƏLİŞ: Daha etibarlı Ethers v5 BigNumber serializasiyası əlavə edildi
+// DÜZƏLİŞ: Daha etibarlı Ethers v5 BigNumber serializasiyası
 function orderToJsonSafe(obj) {
   return JSON.parse(
     JSON.stringify(obj, (k, v) => {
       // Ethers.js BigNumber obyektini String-ə çevirir
       if (v && typeof v === "object" && v.type === 'BigNumber' && v.hex) {
           try {
-              // toString() ilə serializasiya
               return ethers.BigNumber.from(v.hex).toString();
           } catch {
               return v.hex;
@@ -268,6 +267,9 @@ async function buyNFT(nftRecord) {
 async function listNFT(tokenid, priceWei, card) {
   if (!signer || !seaport) return alert("Cüzdan qoşulmayıb!");
 
+  // 🔴 DÜZƏLİŞİN ƏSAS HİSSƏSİ: tokenid-ni BigNumber obyektinə çeviririk
+  const tokenIdBN = ethers.BigNumber.from(tokenid.toString()); 
+  
   const seller = (await signer.getAddress()).toLowerCase();
 
   const nftContract = new ethers.Contract(
@@ -282,7 +284,8 @@ async function listNFT(tokenid, priceWei, card) {
 
   notify("Sahiblik yoxlanılır...");
 
-  const owner = (await nftContract.ownerOf(tokenid)).toLowerCase();
+  // nftContract.ownerOf() funksiyasına BN ötürülür
+  const owner = (await nftContract.ownerOf(tokenIdBN)).toLowerCase(); 
   if (owner !== seller) return alert("NFT sənə məxsus deyil!");
 
   const approved = await nftContract.isApprovedForAll(
@@ -307,7 +310,8 @@ async function listNFT(tokenid, priceWei, card) {
       {
         itemType: 2,
         token: NFT_CONTRACT_ADDRESS,
-        identifierOrCriteria: tokenid.toString(),
+        // identifierOrCriteria üçün BN-in string formatı istifadə olunur
+        identifierOrCriteria: tokenIdBN.toString(), 
         startAmount: "1",
         endAmount: "1",
       },
@@ -339,10 +343,8 @@ async function listNFT(tokenid, priceWei, card) {
 
     const finalOrder = signed.order ?? signed.signedOrder ?? signed;
 
-    // Order hash-i Seaport SDK ilə hesablanır
     const orderHash = seaport.getOrderHash(finalOrder.parameters);
 
-    // Order JSON üçün təhlükəsiz şəkildə serialize edilir (Yenilənmiş funksiya istifadə olunur)
     const plainOrder = orderToJsonSafe(finalOrder);
     
     notify("Order backend-ə göndərilir...");
@@ -364,7 +366,6 @@ async function listNFT(tokenid, priceWei, card) {
 
     const j = await res.json();
     if (!j.success) {
-      // Backend xətası olduqda, xətanı daha aydın göstərmək üçün
       return alert("Backend order-u qəbul etmədi! Səbəb: " + (j.error || "Bilinməyən xəta"));
     }
 
@@ -388,4 +389,4 @@ window.buyNFT = buyNFT;
 window.listNFT = listNFT;
 window.loadNFTs = loadNFTs;
 
-// ===================== END FILE =============================
+// ===================== END FILE 
